@@ -11,10 +11,17 @@ from TaxiFareModel.utils import haversine_vectorized, compute_rmse
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
+from mlflow.tracking import MlflowClient
+import mlflow
+from memoized_property import memoized_property
 
 
+
+MLFLOW_URI = "https://mlflow.lewagon.co/"
+EXPERIMENT_NAME = "[GER] [MUC] [Pierre Sevenig] TaxiFire_model +1"
 
 class Trainer():
+
     def __init__(self, X, y):
         """
             X: pandas DataFrame
@@ -24,7 +31,28 @@ class Trainer():
         self.X = X
         self.y = y
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=0.2)
+        self.experiment_name = EXPERIMENT_NAME
+    @memoized_property
+    def mlflow_client(self):
+        mlflow.set_tracking_uri(MLFLOW_URI)
+        return MlflowClient()
 
+    @memoized_property
+    def mlflow_experiment_id(self):
+        try:
+            return self.mlflow_client.create_experiment(self.experiment_name)
+        except BaseException:
+            return self.mlflow_client.get_experiment_by_name(self.experiment_name).experiment_id
+
+    @memoized_property
+    def mlflow_run(self):
+        return self.mlflow_client.create_run(self.mlflow_experiment_id)
+
+    def mlflow_log_param(self, key, value):
+        self.mlflow_client.log_param(self.mlflow_run.info.run_id, key, value)
+
+    def mlflow_log_metric(self, key, value):
+        self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
 
     def set_pipeline(self):
         """defines the pipeline as a class attribute"""
@@ -56,7 +84,9 @@ class Trainer():
         ])
 
         self.pipeline = pipe
+        self.mlflow_log_param('model', 'linear_model')
         return self.pipeline
+
     def run(self):
         """set and train the pipeline"""
         self.pipeline = self.set_pipeline().fit(self.X_train, self.y_train)
@@ -66,8 +96,10 @@ class Trainer():
         """evaluates the pipeline on df_test and return the RMSE"""
         # compute y_pred on the test set
         y_pred = self.pipeline.predict(self.X_test)
+        rmse_value = compute_rmse(y_pred, self.y_test)
+        self.mlflow_log_metric('RMSE', rmse_value)
+        return rmse_value
 
-        return compute_rmse(y_pred, self.y_test)
 
 
 if __name__ == "__main__":
