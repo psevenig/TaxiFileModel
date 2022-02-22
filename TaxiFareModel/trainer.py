@@ -14,7 +14,7 @@ import numpy as np
 from mlflow.tracking import MlflowClient
 import mlflow
 from memoized_property import memoized_property
-
+import joblib
 
 
 MLFLOW_URI = "https://mlflow.lewagon.co/"
@@ -100,7 +100,9 @@ class Trainer():
         self.mlflow_log_metric('RMSE', rmse_value)
         return rmse_value
 
-
+    def save_model(self):
+        """ Save the trained model into a model.joblib file """
+        joblib.dump(self.pipeline, 'model.joblib')
 
 if __name__ == "__main__":
 
